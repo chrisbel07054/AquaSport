@@ -1,7 +1,8 @@
 const Torneo = require("../models/Torneo");
 const Inscripcion = require("../models/Inscripcion");
 const Usuario = require("../models/Usuario");
-const {sequelize} = require("../config/database"); // Importamos la conexión
+const Ganador = require("../models/Ganador");
+const { sequelize } = require("../config/database"); // Importamos la conexión
 const { Op } = require("sequelize");
 
 class TorneoController {
@@ -26,6 +27,44 @@ class TorneoController {
       return res.status(500).json({
         success: false,
         message: "Error al obtener los torneos",
+        error: error.message
+      });
+    }
+  }
+
+  async obtenerTorneosFinalizados(req, res) {
+    try {
+      const torneos = await Ganador.findAll({
+        include: [
+          {
+            model: Usuario,
+            attributes: { exclude: ["password"] }
+          },
+          {
+            model: Torneo
+          }
+        ]
+      });
+
+      // Verificar si hay registros en la tabla Ganador
+      if (torneos.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: "No hay registros de ganadores",
+          data: []
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Lista de ganadores y torneos",
+        torneos
+      });
+    } catch (error) {
+      console.error("Error al obtener los registros de ganadores:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error al obtener los datos",
         error: error.message
       });
     }
@@ -207,8 +246,8 @@ class TorneoController {
 
   async cambiarEstadoTorneo(req, res) {
     try {
-      const { id } = req.params;
-      const { estado } = req.body;
+      const { id } = req.params; // ID del torneo
+      const { estado, usuarioId } = req.body; // Estado y usuario que ganó
 
       const torneo = await Torneo.findByPk(id);
       if (!torneo) {
@@ -217,8 +256,14 @@ class TorneoController {
           message: "Torneo no encontrado"
         });
       }
-
       await torneo.update({ estado });
+
+      if (estado === "finalizado") {
+        const nuevoGanador = await Ganador.create({
+          usuarioId,
+          torneoId: id
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -237,65 +282,63 @@ class TorneoController {
 
   async obtenerTorneosConInscritos(req, res) {
     try {
-      const torneos = await Torneo.findAll(); 
+      const torneos = await Torneo.findAll();
 
       if (!torneos || torneos.length === 0) {
         return res.status(404).json({
           success: false,
-          message: "No se encontraron torneos",
+          message: "No se encontraron torneos"
         });
       }
-  
+
       const torneosConInscritos = await Promise.all(
         torneos.map(async (torneo) => {
           const inscritos = await Inscripcion.count({
-            where: { torneoId: torneo.id }, 
+            where: { torneoId: torneo.id }
           });
-  
+
           return {
             ...torneo.dataValues,
-            inscritos, // Incluye solo el número de inscritos
+            inscritos // Incluye solo el número de inscritos
           };
         })
       );
-  
+
       return res.status(200).json({
         success: true,
-        torneos: torneosConInscritos,
+        torneos: torneosConInscritos
       });
     } catch (error) {
       console.error("Error en obtenerTorneosConInscritos:", error);
       return res.status(500).json({
         success: false,
         message: "Error al obtener los torneos",
-        error: error.message,
+        error: error.message
       });
     }
   }
-  
 
   async inscribirUsuario(req, res) {
     const transaction = await sequelize.transaction();
-    const torneoId  = req.params.id;
+    const torneoId = req.params.id;
     const usuarioId = req.body.usuarioId;
     try {
-
       // Verificar si el torneo existe
       const torneo = await Torneo.findByPk(torneoId, { transaction });
       if (!torneo) {
         await transaction.rollback();
         return res.status(404).json({
           success: false,
-          message: 'Torneo no encontrado'
+          message: "Torneo no encontrado"
         });
       }
 
       // Verificar si el torneo está activo
-      if (torneo.estado !== 'activo') {
+      if (torneo.estado !== "activo") {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'No es posible inscribirse a un torneo cancelado'
+          message: "No es posible inscribirse a un torneo cancelado"
         });
       }
 
@@ -309,7 +352,7 @@ class TorneoController {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Ya estás inscrito en este torneo'
+          message: "Ya estás inscrito en este torneo"
         });
       }
 
@@ -323,29 +366,88 @@ class TorneoController {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'No hay cupos disponibles para este torneo'
+          message: "No hay cupos disponibles para este torneo"
         });
       }
 
       // Crear la inscripción
-      const nuevaInscripcion = await Inscripcion.create({
-        usuarioId,
-        torneoId
-      }, { transaction });
+      const nuevaInscripcion = await Inscripcion.create(
+        {
+          usuarioId,
+          torneoId
+        },
+        { transaction }
+      );
 
       await transaction.commit();
 
       return res.status(201).json({
         success: true,
-        message: 'Inscripción realizada exitosamente',
+        message: "Inscripción realizada exitosamente",
         inscripcion: nuevaInscripcion
       });
     } catch (error) {
       await transaction.rollback();
-      console.error('Error en inscribirUsuario:', error);
+      console.error("Error en inscribirUsuario:", error);
       return res.status(500).json({
         success: false,
-        message: 'Error al realizar la inscripción',
+        message: "Error al realizar la inscripción",
+        error: error.message
+      });
+    }
+  }
+
+  async obtenerGanadores(req, res) {
+    try {
+      const ganadores = await Ganador.findAll({
+        include: [
+          {
+            model: Usuario,
+            attributes: { exclude: ["password"] }
+          },
+          {
+            model: Torneo
+          }
+        ]
+      });
+
+      if (ganadores.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: "No hay torneos finalizados",
+          data: []
+        });
+      }
+
+      // Contar los torneos ganados por usuario.
+      const conteoGanadores = {};
+      for (const ganador of ganadores) {
+        const usuarioId = ganador.usuarioId;
+        const usuarioNombre = ganador.Usuario.nombre;
+
+        if (!conteoGanadores[usuarioId]) {
+          conteoGanadores[usuarioId] = {
+            usuarioId,
+            nombreUsuario: usuarioNombre,
+            torneosGanados: 0
+          };
+        }
+        conteoGanadores[usuarioId].torneosGanados++;
+      }
+
+      // Convertir el objeto de conteo en un array
+      const resultado = Object.values(conteoGanadores);
+
+      return res.status(200).json({
+        success: true,
+        message: "Conteo de torneos ganados por usuario",
+        ganadores: resultado
+      });
+    } catch (error) {
+      console.error("Error al obtener ganadores:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error al obtener los datos",
         error: error.message
       });
     }
