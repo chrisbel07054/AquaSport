@@ -7,6 +7,8 @@ const { authenticate, authorize } = require('../middleware/authMiddleware')
 router.get('/', authenticate, authorize(['admin']), TorneoController.obtenerTorneosConInscritos);
 //torneos activos
 router.get('/activos', TorneoController.obtenerTorneosActivos);
+//torneos finalizados
+router.get('/finalizados', TorneoController.obtenerTorneosFinalizados);
 // Ruta para obtener torneos con filtros
 router.get('/filtros', TorneoController.obtenerTorneosConFiltros);
 // Ruta para obtener detalle de un torneo
