@@ -12,6 +12,8 @@ import CreateTournament from "./pages/CreateTournament";
 import Testimonials from "./pages/Testimonials";
 import UserDashboard from "./pages/UserDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import TournamentsHistory from "./pages/TournamentsHistory";
+import UserProfile from "./pages/UserProfile";
 import ScrollToTop from "./utils/ScrollToTop";
 
 function App() {
@@ -29,7 +31,19 @@ function App() {
             <Route path='/tournaments' element={<Tournaments />} />
             <Route path='/tournaments/:id' element={<TournamentDetail />} />
             <Route path='/testimonials' element={<Testimonials />} />
-            <Route path='/dashboard' element={<PrivateRoute><UserDashboard /></PrivateRoute>} />
+            <Route
+              path='/dashboard'
+              element={
+                <PrivateRoute>
+                  <UserDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path='/tournaments-history'
+              element={<TournamentsHistory />}
+            />
+            <Route path='/user-profile/:id' element={<UserProfile />} />
             {/* rutas para administradores */}
             <Route
               path='/admin'
@@ -39,7 +53,7 @@ function App() {
                 </PrivateRoute>
               }
             />
-             <Route
+            <Route
               path='/create-tournament'
               element={
                 <PrivateRoute adminOnly={true}>
